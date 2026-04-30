@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
 const STORAGE_KEY = "jardin-capacete-v2";
+const PUSH_STORAGE_KEY = "push-subscription";
 
 const SEVILLA = {
   latitude: 37.3891,
@@ -285,6 +286,20 @@ function urlBase64ToUint8Array(base64String) {
   return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
 }
 
+function buildBackendPlants(plants, weather) {
+  return plants.map((plant) => {
+    const normalizedPlant = normalizePlant(plant);
+
+    return {
+      ...normalizedPlant,
+      water: getAdjustedWater(normalizedPlant, weather),
+      frequency: getAdjustedFrequency(normalizedPlant, weather),
+      nextWatering: getNextWateringDate(normalizedPlant, weather).toISOString(),
+      stageLabel: getStageInfo(normalizedPlant.stage).label,
+    };
+  });
+}
+
 export default function App() {
   const [plants, setPlants] = useState(() => {
     try {
@@ -353,6 +368,18 @@ export default function App() {
     loadWeather();
   }, []);
 
+  useEffect(() => {
+    async function autoSyncGarden() {
+      const savedSubscription = localStorage.getItem(PUSH_STORAGE_KEY);
+
+      if (!savedSubscription) return;
+
+      await syncGarden(JSON.parse(savedSubscription), plants);
+    }
+
+    autoSyncGarden();
+  }, [plants, weather]);
+
   const selectedPlant =
     plants.find((plant) => plant.id === selectedId) || plants[0];
 
@@ -381,6 +408,25 @@ export default function App() {
 
   const weatherFactor = getWeatherFactor(weather);
 
+  async function syncGarden(subscription, gardenPlants = plants) {
+    if (!subscription?.endpoint) return;
+
+    try {
+      await fetch("/.netlify/functions/save-garden", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          subscription,
+          plants: buildBackendPlants(gardenPlants, weather),
+        }),
+      });
+    } catch (error) {
+      console.log("Error sincronizando jardín:", error);
+    }
+  }
+
   function selectTemplate(template) {
     setDraft({ ...template, stage: template.stage || "mature" });
     setSearch(template.name);
@@ -389,10 +435,24 @@ export default function App() {
   function resetData() {
     setPlants([]);
     setSelectedId(null);
+
+    const savedSubscription = localStorage.getItem(PUSH_STORAGE_KEY);
+    if (savedSubscription) {
+      syncGarden(JSON.parse(savedSubscription), []);
+    }
   }
 
   function deletePlant(id) {
-    setPlants((current) => current.filter((plant) => plant.id !== id));
+    setPlants((current) => {
+      const nextPlants = current.filter((plant) => plant.id !== id);
+
+      const savedSubscription = localStorage.getItem(PUSH_STORAGE_KEY);
+      if (savedSubscription) {
+        syncGarden(JSON.parse(savedSubscription), nextPlants);
+      }
+
+      return nextPlants;
+    });
 
     if (selectedId === id) {
       setSelectedId(null);
@@ -400,16 +460,23 @@ export default function App() {
   }
 
   function updatePlantStage(id, stage) {
-    setPlants((current) =>
-      current.map((plant) =>
+    setPlants((current) => {
+      const nextPlants = current.map((plant) =>
         plant.id === id
           ? {
               ...plant,
               stage,
             }
           : plant
-      )
-    );
+      );
+
+      const savedSubscription = localStorage.getItem(PUSH_STORAGE_KEY);
+      if (savedSubscription) {
+        syncGarden(JSON.parse(savedSubscription), nextPlants);
+      }
+
+      return nextPlants;
+    });
   }
 
   async function requestNotifications() {
@@ -442,9 +509,10 @@ export default function App() {
 
       if (existingSubscription) {
         localStorage.setItem(
-          "push-subscription",
+          PUSH_STORAGE_KEY,
           JSON.stringify(existingSubscription)
         );
+        await syncGarden(existingSubscription, plants);
         setNotificationMessage("Notificaciones ya estaban activadas.");
         return;
       }
@@ -466,7 +534,9 @@ export default function App() {
         applicationServerKey: urlBase64ToUint8Array(publicKey),
       });
 
-      localStorage.setItem("push-subscription", JSON.stringify(subscription));
+      localStorage.setItem(PUSH_STORAGE_KEY, JSON.stringify(subscription));
+
+      await syncGarden(subscription, plants);
 
       setNotificationMessage("Notificaciones activadas correctamente.");
     } catch (error) {
@@ -477,12 +547,14 @@ export default function App() {
 
   async function sendTestWateringNotification() {
     try {
-      const savedSubscription = localStorage.getItem("push-subscription");
+      const savedSubscription = localStorage.getItem(PUSH_STORAGE_KEY);
 
       if (!savedSubscription) {
         setNotificationMessage("Primero activa las notificaciones.");
         return;
       }
+
+      await syncGarden(JSON.parse(savedSubscription), plants);
 
       const plant = nextPlant || selectedPlant;
       const water = plant ? getAdjustedWater(plant, weather) : null;
@@ -536,10 +608,18 @@ export default function App() {
       history: [],
     };
 
-    setPlants((current) => [newPlant, ...current]);
+    const nextPlants = [newPlant, ...plants];
+
+    setPlants(nextPlants);
     setSelectedId(newPlant.id);
     setShowForm(false);
     setSearch("");
+
+    const savedSubscription = localStorage.getItem(PUSH_STORAGE_KEY);
+    if (savedSubscription) {
+      await syncGarden(JSON.parse(savedSubscription), nextPlants);
+    }
+
     setDraft({
       name: "",
       category: "",
@@ -555,8 +635,8 @@ export default function App() {
   function markWatered(id) {
     const now = new Date();
 
-    setPlants((current) =>
-      current.map((plant) =>
+    setPlants((current) => {
+      const nextPlants = current.map((plant) =>
         plant.id === id
           ? {
               ...plant,
@@ -571,8 +651,15 @@ export default function App() {
               ].slice(0, 10),
             }
           : plant
-      )
-    );
+      );
+
+      const savedSubscription = localStorage.getItem(PUSH_STORAGE_KEY);
+      if (savedSubscription) {
+        syncGarden(JSON.parse(savedSubscription), nextPlants);
+      }
+
+      return nextPlants;
+    });
   }
 
   return (
@@ -650,7 +737,7 @@ export default function App() {
           </strong>
           <p>
             {isStandalone
-              ? "Activa o prueba avisos reales de riego."
+              ? "Avisos reales sincronizados con tu jardín."
               : "En iPhone debes abrir la app desde el icono de pantalla de inicio."}
           </p>
           {notificationMessage && <small>{notificationMessage}</small>}
