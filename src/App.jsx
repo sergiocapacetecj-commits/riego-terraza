@@ -317,6 +317,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState("");
+  const [showNotificationMenu, setShowNotificationMenu] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState(
     typeof Notification !== "undefined" ? Notification.permission : "unsupported"
   );
@@ -673,8 +674,66 @@ export default function App() {
           </p>
         </div>
 
-        <div className="heroIcon appStoreIcon">
-          <img src="/icon-192.png" alt="El jardín de Capacete" />
+        <div className="heroRight">
+          <div className="heroIcon appStoreIcon">
+            <img src="/icon-192.png" alt="El jardín de Capacete" />
+          </div>
+
+          <div className="notificationBellBox">
+            <button
+              className={`notificationBell ${
+                notificationPermission === "granted"
+                  ? "active"
+                  : notificationPermission === "denied"
+                  ? "blocked"
+                  : ""
+              }`}
+              onClick={() => setShowNotificationMenu((value) => !value)}
+              aria-label="Notificaciones"
+            >
+              🔔
+            </button>
+
+            {showNotificationMenu && (
+              <div className="notificationPopover">
+                <span>Notificaciones</span>
+                <strong>
+                  {notificationPermission === "granted"
+                    ? "Activas"
+                    : notificationPermission === "denied"
+                    ? "Bloqueadas"
+                    : notificationPermission === "unsupported"
+                    ? "No disponibles"
+                    : "Pendientes"}
+                </strong>
+
+                <p>
+                  {isStandalone
+                    ? "Avisos reales sincronizados con tu jardín."
+                    : "En iPhone abre la app desde el icono de inicio."}
+                </p>
+
+                {notificationMessage && <small>{notificationMessage}</small>}
+
+                <button
+                  className="popoverBtn"
+                  onClick={async () => {
+                    await requestNotifications();
+                    setShowNotificationMenu(false);
+                  }}
+                >
+                  Activar notificaciones
+                </button>
+
+                <button
+                  className="popoverBtn secondary"
+                  onClick={sendTestWateringNotification}
+                >
+                  Probar aviso
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
@@ -721,36 +780,6 @@ export default function App() {
               : "Sin plantas"}
           </p>
         </article>
-      </section>
-
-      <section className="notificationPanel">
-        <div>
-          <span>Notificaciones</span>
-          <strong>
-            {notificationPermission === "granted"
-              ? "Activas"
-              : notificationPermission === "denied"
-              ? "Bloqueadas"
-              : notificationPermission === "unsupported"
-              ? "No disponibles"
-              : "Pendientes"}
-          </strong>
-          <p>
-            {isStandalone
-              ? "Avisos reales sincronizados con tu jardín."
-              : "En iPhone debes abrir la app desde el icono de pantalla de inicio."}
-          </p>
-          {notificationMessage && <small>{notificationMessage}</small>}
-        </div>
-
-        <div className="notificationActions">
-          <button className="secondaryBtn" onClick={requestNotifications}>
-            Activar
-          </button>
-          <button className="secondaryBtn" onClick={sendTestWateringNotification}>
-            Probar aviso
-          </button>
-        </div>
       </section>
 
       <section className="sectionHeader">

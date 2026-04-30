@@ -45,6 +45,15 @@ button {
   margin-bottom: 24px;
 }
 
+.heroRight {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
 .eyebrow {
   margin: 0 0 8px;
   color: #86efac;
@@ -83,7 +92,6 @@ h1 {
   width: 82px;
   height: 82px;
   place-items: center;
-  flex: 0 0 auto;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 26px;
@@ -121,13 +129,128 @@ h1 {
   }
 }
 
+/* CAMPANA PRO */
+
+.notificationBellBox {
+  position: relative;
+}
+
+.notificationBell {
+  position: relative;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(236, 253, 245, 0.16);
+  border-radius: 999px;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.16), rgba(255,255,255,0.06)),
+    rgba(255,255,255,0.1);
+  color: #ffffff;
+  font-size: 18px;
+  box-shadow:
+    0 14px 34px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255,255,255,0.16);
+  backdrop-filter: blur(16px);
+  transition: transform 0.18s ease, background 0.18s ease, border 0.18s ease;
+}
+
+.notificationBell::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #031b12;
+  border-radius: 999px;
+  background: #f59e0b;
+}
+
+.notificationBell.active::after {
+  background: #22c55e;
+}
+
+.notificationBell.blocked::after {
+  background: #ef4444;
+}
+
+.notificationBell:active {
+  transform: scale(0.94);
+}
+
+.notificationPopover {
+  position: absolute;
+  top: 50px;
+  right: 0;
+  z-index: 20;
+  width: 260px;
+  padding: 16px;
+  border: 1px solid rgba(236, 253, 245, 0.16);
+  border-radius: 24px;
+  background:
+    linear-gradient(145deg, rgba(15, 23, 42, 0.96), rgba(5, 46, 31, 0.94));
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255,255,255,0.14);
+  backdrop-filter: blur(22px);
+}
+
+.notificationPopover span {
+  display: block;
+  margin-bottom: 6px;
+  color: rgba(236, 253, 245, 0.66);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.notificationPopover strong {
+  display: block;
+  color: #ffffff;
+  font-size: 24px;
+  letter-spacing: -0.05em;
+}
+
+.notificationPopover p {
+  margin: 8px 0 12px;
+  color: rgba(236, 253, 245, 0.72);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.notificationPopover small {
+  display: block;
+  margin-bottom: 12px;
+  color: #86efac;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.popoverBtn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #ffffff;
+  font-weight: 900;
+}
+
+.popoverBtn.secondary {
+  background: rgba(255,255,255,0.12);
+  color: #ecfdf5;
+}
+
 /* DASHBOARD WIDGETS */
 
 .dashboardWidgets {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
-  margin-bottom: 22px;
+  margin-bottom: 28px;
 }
 
 .widget {
@@ -247,61 +370,6 @@ h1 {
 
 .widgetNext {
   background: linear-gradient(135deg, rgba(20, 83, 45, 0.95), rgba(5, 46, 31, 0.9));
-}
-
-/* NOTIFICACIONES */
-
-.notificationPanel {
-  display: grid;
-  gap: 16px;
-  margin-bottom: 26px;
-  padding: 18px;
-  border: 1px solid rgba(236, 253, 245, 0.14);
-  border-radius: 30px;
-  background:
-    linear-gradient(145deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06)),
-    rgba(255, 255, 255, 0.08);
-  box-shadow:
-    0 24px 62px rgba(0, 0, 0, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.14);
-  backdrop-filter: blur(20px);
-}
-
-.notificationPanel span {
-  display: block;
-  margin-bottom: 8px;
-  color: rgba(236, 253, 245, 0.68);
-  font-size: 13px;
-  font-weight: 850;
-}
-
-.notificationPanel strong {
-  display: block;
-  color: #ffffff;
-  font-size: 26px;
-  line-height: 1;
-  letter-spacing: -0.05em;
-}
-
-.notificationPanel p {
-  margin: 10px 0 0;
-  color: rgba(236, 253, 245, 0.72);
-  font-size: 14px;
-  line-height: 1.4;
-}
-
-.notificationPanel small {
-  display: block;
-  margin-top: 10px;
-  color: #86efac;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.notificationActions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
 }
 
 /* HEADER */
@@ -614,6 +682,36 @@ h1 {
   color: #be123c;
 }
 
+/* EMPTY */
+
+.emptyGarden {
+  margin-bottom: 24px;
+  padding: 24px;
+  border: 1px solid rgba(236, 253, 245, 0.14);
+  border-radius: 32px;
+  background: rgba(255,255,255,0.1);
+  text-align: center;
+  box-shadow: 0 22px 60px rgba(0,0,0,0.22);
+  backdrop-filter: blur(18px);
+}
+
+.emptyGarden span {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 42px;
+}
+
+.emptyGarden h2 {
+  color: #ffffff;
+  font-size: 26px;
+  letter-spacing: -0.05em;
+}
+
+.emptyGarden p {
+  color: rgba(236, 253, 245, 0.72);
+  line-height: 1.45;
+}
+
 /* FORMULARIO */
 
 .formPanel {
@@ -856,6 +954,11 @@ textarea:focus {
     height: 60px;
   }
 
+  .notificationPopover {
+    right: -6px;
+    width: 252px;
+  }
+
   .dashboardWidgets {
     gap: 12px;
   }
@@ -866,10 +969,6 @@ textarea:focus {
 
   .widgetWeather strong {
     font-size: 38px;
-  }
-
-  .notificationActions {
-    grid-template-columns: 1fr;
   }
 
   .plantCard {
