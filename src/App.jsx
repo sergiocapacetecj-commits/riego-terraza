@@ -275,6 +275,16 @@ function getStandaloneStatus() {
   );
 }
 
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding)
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
+
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+}
+
 export default function App() {
   const [plants, setPlants] = useState(() => {
     try {
@@ -370,7 +380,6 @@ export default function App() {
   }, [plants, weather]);
 
   const weatherFactor = getWeatherFactor(weather);
-  const shouldShowNotificationPanel = true;
 
   function selectTemplate(template) {
     setDraft({ ...template, stage: template.stage || "mature" });
@@ -406,65 +415,100 @@ export default function App() {
   async function requestNotifications() {
     setNotificationMessage("");
 
-    if (!("Notification" in window)) {
-      setNotificationPermission("unsupported");
-      setNotificationMessage("Este navegador no soporta notificaciones.");
-      return;
-    }
-
-    if (!("serviceWorker" in navigator)) {
-      setNotificationMessage("No se ha detectado Service Worker.");
-      return;
-    }
-
     try {
+      if (!("Notification" in window)) {
+        setNotificationPermission("unsupported");
+        setNotificationMessage("Este navegador no soporta notificaciones.");
+        return;
+      }
+
+      if (!("serviceWorker" in navigator)) {
+        setNotificationMessage("No se ha detectado Service Worker.");
+        return;
+      }
+
       const permission = await Notification.requestPermission();
       setNotificationPermission(permission);
 
       if (permission !== "granted") {
-        setNotificationMessage("Permiso de notificaciones no concedido.");
+        setNotificationMessage("Permiso no concedido.");
         return;
       }
 
       const registration = await navigator.serviceWorker.ready;
 
-      await registration.showNotification("🌿 Jardín", {
-        body: "Notificaciones activadas correctamente.",
-        icon: "/icon-192.png",
-        badge: "/icon-192.png",
+      const existingSubscription =
+        await registration.pushManager.getSubscription();
+
+      if (existingSubscription) {
+        localStorage.setItem(
+          "push-subscription",
+          JSON.stringify(existingSubscription)
+        );
+        setNotificationMessage("Notificaciones ya estaban activadas.");
+        return;
+      }
+
+      const keyResponse = await fetch("/.netlify/functions/public-key");
+
+      if (!keyResponse.ok) {
+        throw new Error("No se pudo obtener la clave pública.");
+      }
+
+      const { publicKey } = await keyResponse.json();
+
+      if (!publicKey) {
+        throw new Error("Falta VAPID_PUBLIC_KEY.");
+      }
+
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
       });
 
-      setNotificationMessage("Notificación de prueba enviada correctamente.");
+      localStorage.setItem("push-subscription", JSON.stringify(subscription));
+
+      setNotificationMessage("Notificaciones activadas correctamente.");
     } catch (error) {
-      console.log("Error notificaciones:", error);
-      setNotificationMessage("No se pudo enviar la notificación de prueba.");
+      console.log("Error activando push:", error);
+      setNotificationMessage("No se pudieron activar las notificaciones.");
     }
   }
 
   async function sendTestWateringNotification() {
-    if (!("Notification" in window) || Notification.permission !== "granted") {
-      setNotificationMessage("Primero activa las notificaciones.");
-      return;
-    }
-
-    const plant = nextPlant || selectedPlant;
-    const water = plant ? getAdjustedWater(plant, weather) : null;
-
     try {
-      const registration = await navigator.serviceWorker.ready;
+      const savedSubscription = localStorage.getItem("push-subscription");
 
-      await registration.showNotification("Aviso de riego", {
-        body: plant
-          ? `${plant.name}: próximo riego recomendado · ${water} ml.`
-          : "Tienes una planta pendiente de riego.",
-        icon: "/icon-192.png",
-        badge: "/icon-192.png",
+      if (!savedSubscription) {
+        setNotificationMessage("Primero activa las notificaciones.");
+        return;
+      }
+
+      const plant = nextPlant || selectedPlant;
+      const water = plant ? getAdjustedWater(plant, weather) : null;
+
+      const response = await fetch("/.netlify/functions/send-test-push", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          subscription: JSON.parse(savedSubscription),
+          title: "🌿 Aviso de riego",
+          body: plant
+            ? `${plant.name}: riego recomendado · ${water} ml.`
+            : "Notificación real funcionando.",
+        }),
       });
 
-      setNotificationMessage("Notificación de prueba enviada.");
+      if (!response.ok) {
+        throw new Error("Error enviando push.");
+      }
+
+      setNotificationMessage("Push real enviado.");
     } catch (error) {
-      setNotificationMessage("No se pudo enviar la notificación de prueba.");
-      console.log("Error test notification:", error);
+      console.log("Error enviando push:", error);
+      setNotificationMessage("No se pudo enviar el push real.");
     }
   }
 
@@ -592,38 +636,35 @@ export default function App() {
         </article>
       </section>
 
-      {shouldShowNotificationPanel && (
-        <section className="notificationPanel">
-          <div>
-            <span>Notificaciones</span>
-            <strong>
-              {notificationPermission === "denied"
-                ? "Bloqueadas"
-                : notificationPermission === "unsupported"
-                ? "No disponibles"
-                : "Pendientes"}
-            </strong>
-            <p>
-              {isStandalone
-                ? "Activa los avisos para probar recordatorios de riego."
-                : "En iPhone debes abrir la app desde el icono de pantalla de inicio."}
-            </p>
-            {notificationMessage && <small>{notificationMessage}</small>}
-          </div>
+      <section className="notificationPanel">
+        <div>
+          <span>Notificaciones</span>
+          <strong>
+            {notificationPermission === "granted"
+              ? "Activas"
+              : notificationPermission === "denied"
+              ? "Bloqueadas"
+              : notificationPermission === "unsupported"
+              ? "No disponibles"
+              : "Pendientes"}
+          </strong>
+          <p>
+            {isStandalone
+              ? "Activa o prueba avisos reales de riego."
+              : "En iPhone debes abrir la app desde el icono de pantalla de inicio."}
+          </p>
+          {notificationMessage && <small>{notificationMessage}</small>}
+        </div>
 
-          <div className="notificationActions">
-            <button className="secondaryBtn" onClick={requestNotifications}>
-              Activar
-            </button>
-            <button
-              className="secondaryBtn"
-              onClick={sendTestWateringNotification}
-            >
-              Probar aviso
-            </button>
-          </div>
-        </section>
-      )}
+        <div className="notificationActions">
+          <button className="secondaryBtn" onClick={requestNotifications}>
+            Activar
+          </button>
+          <button className="secondaryBtn" onClick={sendTestWateringNotification}>
+            Probar aviso
+          </button>
+        </div>
+      </section>
 
       <section className="sectionHeader">
         <h2>Mi Jardín</h2>
