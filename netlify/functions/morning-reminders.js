@@ -1,5 +1,5 @@
-import { getStore } from "@netlify/blobs";
-import webpush from "web-push";
+const webpush = require("web-push");
+const { createClient } = require("@supabase/supabase-js");
 
 webpush.setVapidDetails(
   process.env.VAPID_SUBJECT,
@@ -7,90 +7,67 @@ webpush.setVapidDetails(
   process.env.VAPID_PRIVATE_KEY
 );
 
-export const config = {
-  schedule: "0 6,7 * * *",
-};
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
-function isToday(dateString) {
-  const now = new Date();
-  const date = new Date(dateString);
-
-  return (
-    now.getFullYear() === date.getFullYear() &&
-    now.getMonth() === date.getMonth() &&
-    now.getDate() === date.getDate()
-  );
-}
-
-function addDaysFrom(date, days) {
-  const d = new Date(date);
-  d.setDate(d.getDate() + Number(days));
-  return d;
-}
-
-function getDuePlants(plants) {
-  const now = new Date();
-
-  return plants.filter((plant) => {
-    if (!plant.lastWatered || !plant.frequency) return false;
-
-    const next = addDaysFrom(plant.lastWatered, plant.frequency);
-    next.setHours(0, 0, 0, 0);
-
-    const today = new Date(now);
-    today.setHours(0, 0, 0, 0);
-
-    return next <= today;
-  });
-}
-
-export async function handler() {
+exports.handler = async () => {
   try {
-    const store = getStore("gardens");
-    const { blobs } = await store.list();
+    const { data, error } = await supabase
+      .from("jardines")
+      .select("*");
 
-    for (const blob of blobs) {
-      const garden = await store.get(blob.key, { type: "json" });
+    if (error) {
+      throw error;
+    }
 
-      if (!garden?.subscription || !Array.isArray(garden.plants)) continue;
+    for (const garden of data) {
+      const plants = garden.plants || [];
 
-      const duePlants = getDuePlants(garden.plants);
+      for (const plant of plants) {
+        if (!plant.nextWatering) continue;
 
-      for (const plant of duePlants) {
-        if (plant.lastMorningReminder && isToday(plant.lastMorningReminder)) {
-          continue;
+        const next = new Date(plant.nextWatering);
+        const now = new Date();
+
+        const sameDay =
+          next.getDate() === now.getDate() &&
+          next.getMonth() === now.getMonth() &&
+          next.getFullYear() === now.getFullYear();
+
+        if (!sameDay) continue;
+
+        const payload = JSON.stringify({
+          title: `🌿 Riego pendiente`,
+          body: `${plant.name} necesita riego esta mañana`,
+        });
+
+        try {
+          await webpush.sendNotification(
+            garden.subscription,
+            payload
+          );
+        } catch (e) {
+          console.error("push error", e.message);
         }
-
-        await webpush.sendNotification(
-          garden.subscription,
-          JSON.stringify({
-            title: `🌿 ${plant.name}`,
-            body: `Hoy toca riego · ${plant.water || "—"} ml · ${
-              plant.stage || "planta"
-            }`,
-          })
-        );
-
-        plant.lastMorningReminder = new Date().toISOString();
       }
-
-      await store.setJSON(blob.key, {
-        ...garden,
-        plants: garden.plants,
-        updatedAt: new Date().toISOString(),
-      });
     }
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ ok: true }),
+      body: JSON.stringify({
+        success: true,
+      }),
     };
-  } catch (error) {
-    console.error("morning-reminders error:", error);
+  } catch (err) {
+    console.error(err);
 
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "Error enviando avisos de mañana" }),
+      body: JSON.stringify({
+        error: err.message,
+      }),
     };
   }
-}
+};

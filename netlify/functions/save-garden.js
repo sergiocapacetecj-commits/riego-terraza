@@ -1,44 +1,66 @@
-import { getStore } from "@netlify/blobs";
+const { createClient } = require("@supabase/supabase-js");
 
-export async function handler(event) {
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+exports.handler = async (event) => {
   try {
     if (event.httpMethod !== "POST") {
       return {
         statusCode: 405,
-        body: JSON.stringify({ error: "Method not allowed" }),
+        body: "Method not allowed",
       };
     }
 
     const body = JSON.parse(event.body || "{}");
-    const { subscription, plants } = body;
 
-    if (!subscription?.endpoint) {
+    const { endpoint, subscription, plants } = body;
+
+    if (!endpoint || !subscription) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "Falta subscription" }),
+        body: JSON.stringify({
+          error: "Missing endpoint or subscription",
+        }),
       };
     }
 
-    const store = getStore("gardens");
+    const { error } = await supabase
+      .from("jardines")
+      .upsert({
+        endpoint,
+        subscription,
+        plants: plants || [],
+        updated_at: new Date().toISOString(),
+      });
 
-    const id = encodeURIComponent(subscription.endpoint);
+    if (error) {
+      console.error(error);
 
-    await store.setJSON(id, {
-      subscription,
-      plants: Array.isArray(plants) ? plants : [],
-      updatedAt: new Date().toISOString(),
-    });
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          error: error.message,
+        }),
+      };
+    }
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ ok: true }),
+      body: JSON.stringify({
+        ok: true,
+      }),
     };
-  } catch (error) {
-    console.error("save-garden error:", error);
+  } catch (err) {
+    console.error("save-garden error", err);
 
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "No se pudo guardar el jardín" }),
+      body: JSON.stringify({
+        error: err.message,
+      }),
     };
   }
-}
+};
